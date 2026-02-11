@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { getDailyWord } from "../utils/dailyWord"
 import { dbPromise } from "../services/db"
+import { auth } from "../services/firebase"
 
 function shuffleWord(word) {
   return word
@@ -54,26 +55,51 @@ function WordScramble() {
   }
 
   const calculateStreak = (history) => {
-    let streak = 0
+    let streakCount = 0
     let currentDate = new Date()
 
     while (true) {
       const dateStr = currentDate.toISOString().split("T")[0]
+
       if (history[dateStr]) {
-        streak++
+        streakCount++
         currentDate.setDate(currentDate.getDate() - 1)
       } else {
         break
       }
     }
 
-    return streak
+    return streakCount
+  }
+
+  const syncToServer = async (history) => {
+    try {
+      const user = auth.currentUser
+      if (!user) return
+
+      await fetch("/api/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          history
+        })
+      })
+
+      console.log("Synced to server")
+
+    } catch (error) {
+      console.error("Sync failed:", error)
+    }
   }
 
   const checkAnswer = async () => {
     if (locked) return
 
     if (input.toUpperCase() === WORD) {
+
       setResult("Correct 🎉")
       setLocked(true)
 
@@ -88,6 +114,10 @@ function WordScramble() {
       await db.put("history", history, "puzzleHistory")
 
       setStreak(calculateStreak(history))
+
+      // 🔥 Sync to Neon DB
+      syncToServer(history)
+
     } else {
       setResult("Wrong ❌")
     }
