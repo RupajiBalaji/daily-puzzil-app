@@ -2,6 +2,7 @@ import { signOut } from "firebase/auth"
 import { auth } from "../services/firebase"
 import WordScramble from "../puzzles/WordScramble"
 import Heatmap from "../components/Heatmap"
+import Leaderboard from "../components/Leaderboard"
 
 function Game() {
 
@@ -21,6 +22,8 @@ function Game() {
       </div>
 
       <Heatmap />
+
+      <Leaderboard />
 
       <button
         onClick={handleLogout}
