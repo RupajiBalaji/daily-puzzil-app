@@ -41,19 +41,6 @@ function WordScramble() {
     return () => clearInterval(timer)
   }, [locked])
 
-  const loadHistory = async () => {
-    const db = await dbPromise
-    const history = await db.get("history", "puzzleHistory") || {}
-
-    if (history[today]) {
-      setLocked(true)
-      setScore(history[today])
-      setResult("Already Completed Today ✅")
-    }
-
-    setStreak(calculateStreak(history))
-  }
-
   const calculateStreak = (history) => {
     let streakCount = 0
     let currentDate = new Date()
@@ -70,6 +57,22 @@ function WordScramble() {
     }
 
     return streakCount
+  }
+
+  const fetchFromServer = async () => {
+    try {
+      const user = auth.currentUser
+      if (!user) return {}
+
+      const response = await fetch(`/api/sync?userId=${user.uid}`)
+      const data = await response.json()
+
+      return data.history || {}
+
+    } catch (error) {
+      console.error("Fetch failed:", error)
+      return {}
+    }
   }
 
   const syncToServer = async (history) => {
@@ -95,6 +98,33 @@ function WordScramble() {
     }
   }
 
+  const loadHistory = async () => {
+
+    const db = await dbPromise
+    const localHistory = await db.get("history", "puzzleHistory") || {}
+
+    const cloudHistory = await fetchFromServer()
+
+    // Merge local + cloud
+    const mergedHistory = {
+      ...localHistory,
+      ...cloudHistory
+    }
+
+    await db.put("history", mergedHistory, "puzzleHistory")
+
+    // Re-sync merged version to cloud
+    syncToServer(mergedHistory)
+
+    if (mergedHistory[today]) {
+      setLocked(true)
+      setScore(mergedHistory[today])
+      setResult("Already Completed Today ✅")
+    }
+
+    setStreak(calculateStreak(mergedHistory))
+  }
+
   const checkAnswer = async () => {
     if (locked) return
 
@@ -115,7 +145,7 @@ function WordScramble() {
 
       setStreak(calculateStreak(history))
 
-      // 🔥 Sync to Neon DB
+      // Sync to cloud
       syncToServer(history)
 
     } else {
